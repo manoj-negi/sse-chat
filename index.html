@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat Server</title>
+</head>
+<body>
+  <h1>Chat Server</h1>
+
+  <!-- Create User Section -->
+  <section id="create-user">
+    <h2>Create User</h2>
+    <input type="text" id="username" placeholder="Enter username">
+    <button onclick="createUser()">Create User</button>
+    <p id="user-result"></p>
+
+    <button onclick="fetchUsers()">Load Users</button>
+
+    <h1>User List</h1>
+    <div id="user-list"></div>
+  </section>
+
+  <!-- Create Room Section -->
+  <section id="create-room">
+    <h2>Create Room</h2>
+    <input type="text" id="roomName" placeholder="Enter room name">
+    <button onclick="createRoom()">Create Room</button>
+    <p id="room-result"></p>
+
+    <button onclick="fetchRooms()">View Room List</button>
+
+    <h1>Room List</h1>
+    <div id="rooms"></div>
+
+  </section>
+
+  <!-- Join Room Section -->
+  <section id="join-room">
+    <h2>Join Room</h2>
+    <input type="text" id="userID" placeholder="Enter your User ID">
+    <input type="text" id="roomID" placeholder="Enter Room ID">
+    <button onclick="joinRoom()">Join Room</button>
+    <p id="join-room-result"></p>
+  </section>
+
+  <!-- Room Messages Section -->
+  <section id="room-messages">
+    <h2>Room Messages</h2>
+    <input type="text" id="messageContent" placeholder="Enter message">
+    <button onclick="sendMessage()">Send Message</button>
+    <div id="messages"></div>
+  </section>
+
+  <!-- Private Message Section -->
+  <section id="private-message">
+    <h2>Send Private Message</h2>
+    <input type="text" id="fromUserID" placeholder="Your User ID">
+    <input type="text" id="toUserID" placeholder="Recipient User ID">
+    <input type="text" id="privateMessageContent" placeholder="Enter private message">
+    <button onclick="sendPrivateMessage()">Send Private Message</button>
+    <p id="private-message-result"></p>
+  </section>
+
+  <script>
+    function fetchUsers() {
+      fetch('http://localhost:8080/list-users', {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+        return response.json();
+      })
+      .then(data => {
+        const userListDiv = document.getElementById('user-list');
+        userListDiv.innerHTML = ''; // Clear previous results
+
+        if (data.length === 0) {
+          userListDiv.innerHTML = '<p>No users found.</p>';
+          return;
+        }
+
+        data.forEach(user => {
+          userListDiv.innerHTML += `<p>ID: ${user.id}, Username: ${user.username}</p>`;
+        });
+      })
+      .catch(error => console.error('Error fetching users:', error));
+    }
+
+    function createUser() {
+      const username = document.getElementById('username').value;
+      fetch('http://localhost:8080/create-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username })
+      })
+      .then(response => response.json())
+      .then(data => {
+        userID = data.userID;
+        document.getElementById('user-result').innerText = data.message + ' - User ID: ' + userID;
+      })
+      .catch(error => console.error('Error creating user:', error));
+    }
+
+    function createRoom() {
+      const roomName = document.getElementById('roomName').value;
+      fetch('http://localhost:8080/create-room', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: roomName })
+      })
+      .then(response => response.json())
+      .then(data => {
+        roomID = data.roomID;
+        document.getElementById('room-result').innerText = data.message + ' - Room ID: ' + roomID;
+      })
+      .catch(error => console.error('Error creating room:', error));
+    }
+
+    function joinRoom() {
+        const userID = document.getElementById('userID').value;
+        const roomID = document.getElementById('roomID').value;
+      fetch('http://localhost:8080/join-room', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userID, roomID })
+      })
+      .then(response => response.json())
+      .then(data => {
+        document.getElementById('join-room-result').innerText = data.message;
+        listenForMessages();
+      })
+      .catch(error => console.error('Error joining room:', error));
+    }
+
+    function sendMessage() {
+      const content = document.getElementById('messageContent').value;
+      fetch('http://localhost:8080/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userID, roomID, message: content })
+      })
+      .then(response => response.json())
+      .then(data => console.log(data.message))
+      .catch(error => console.error('Error sending message:', error));
+    }
+
+    function sendPrivateMessage() {
+      const fromUserID = document.getElementById('fromUserID').value;
+      const toUserID = document.getElementById('toUserID').value;
+      const content = document.getElementById('privateMessageContent').value;
+
+      fetch('http://localhost:8080/send-private', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fromUserID, toUserID, message: content })
+      })
+      .then(response => response.json())
+      .then(data => {
+        document.getElementById('private-message-result').innerText = data.status;
+      })
+      .catch(error => console.error('Error sending private message:', error));
+    }
+
+    function listenForMessages() {
+        const eventSource = new EventSource(`http://localhost:8080/events?roomID=${roomID}`);
+        eventSource.onmessage = (event) => {
+        const messagesDiv = document.getElementById('messages');
+        messagesDiv.innerHTML += `<p>${event.data}</p>`;
+      };
+    }
+
+    function fetchRooms() {
+        fetch('http://localhost:8080/rooms')
+                .then(response => response.json())
+                .then(data => {
+                    const roomsDiv = document.getElementById('rooms');
+                    roomsDiv.innerHTML = ''; // Clear previous content
+
+                    if (data.length === 0) {
+                        roomsDiv.innerHTML = '<p>No rooms available.</p>';
+                    } else {
+                        data.forEach(room => {
+                            const roomElement = document.createElement('div');
+                            roomElement.innerHTML = `
+                                <h3>Room ID: ${room.roomID}</h3>
+                                <h4>Clients:</h4>
+                                <ul>
+                                    ${room.clients ? 
+                                        (room.clients.length > 0 ? 
+                                            room.clients.map(client => `<li>${client.username} (ID: ${client.id})</li>`).join('') 
+                                            : '<li>No clients in this room.</li>')
+                                        : '<li>No clients in this room.</li>'}
+                                </ul>
+                            `;
+                            roomsDiv.appendChild(roomElement);
+                        });
+                    }
+                })
+                .catch(error => console.error('Error fetching rooms:', error));
+        }
+
+        document.addEventListener('DOMContentLoaded', fetchRooms);
+  </script>
+</body>
+</html>
